@@ -1,0 +1,93 @@
+# =============================================================================
+# Autonomous Robotic Chemist -- container topology.
+#
+#   agents      the pipeline. Small, no GPU, no robot. The default.
+#   tests       the same image, running the suite. Used by CI.
+#   perception  PLATO's vision stack. GPU, several GB, PROFILE-GATED so it is
+#               never built unless explicitly asked for.
+#
+# Not present, deliberately: the Franka control loop. frankapy needs a
+# real-time kernel and runs natively on the control PC.
+#
+#   docker compose build agents
+#   docker compose run --rm tests
+#   docker compose run --rm agents python run_experiment.py --experiment A
+#   docker compose --profile perception build perception
+# =============================================================================
+
+x-agents-base: &agents-base
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.agents
+    args:
+      # Match the host user on Linux so bind-mounted trial logs are not
+      # root-owned. Harmless on Windows and macOS.
+      UID: "${UID:-1000}"
+      GID: "${GID:-1000}"
+  image: chemist-agents:latest
+  # The API key reaches the container's environment at run time. It is never
+  # baked into a layer -- .env is excluded by .dockerignore.
+  env_file:
+    - .env
+  environment:
+    PLATO_HARDWARE: "${PLATO_HARDWARE:-mock}"
+  volumes:
+    # Source bind-mounted for development: edit on the host, no rebuild.
+    - .:/app
+    # Trial logs are research data. They must outlive the container, so they
+    # are written straight to the host rather than into the container layer.
+    - ./data/logs:/app/data/logs
+  working_dir: /app
+
+services:
+
+  agents:
+    <<: *agents-base
+    container_name: chemist-agents
+    # Overridden on the command line for a real run.
+    command: ["python", "run_experiment.py", "--experiment", "A", "--trials", "1"]
+
+  tests:
+    <<: *agents-base
+    container_name: chemist-tests
+    # The suite must pass without a key: the 111 offline tests cover the loop,
+    # and the 2 live booklet checks skip with an explicit reason. So .env is
+    # optional here, unlike for `agents`, which lets CI run with no secret at all.
+    #
+    # The `required: false` form needs Docker Compose v2.24 or newer. On an
+    # older Compose, replace this block with a plain `env_file: [.env]` and
+    # create an empty .env in CI.
+    env_file:
+      - path: .env
+        required: false
+    command: ["python", "-m", "pytest", "tests/", "-q"]
+
+  perception:
+    profiles: ["perception"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.perception
+    image: chemist-perception:latest
+    container_name: chemist-perception
+    env_file:
+      - .env
+    environment:
+      PLATO_HARDWARE: "${PLATO_HARDWARE:-mock}"
+      NVIDIA_VISIBLE_DEVICES: all
+    volumes:
+      - .:/app
+      - ./data/logs:/app/data/logs
+      # Model checkpoints live outside the image: large, separately licensed,
+      # and versioned independently. Create ./weights and drop them in.
+      - ./weights:/weights:ro
+    working_dir: /app
+    # Requires nvidia-container-toolkit on the host. Comment this block out to
+    # build and inspect the image on a machine without a GPU.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: ["bash"]

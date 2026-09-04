@@ -1,0 +1,25 @@
+# Autonomous Robotic Chemist -- requirements for the agent pipeline in this repo.
+#
+# Deliberately small. PLATO's own heavyweight perception stack (torch,
+# segment-anything, GroundingDINO, faiss, ...) lives in
+# PLATO/PLATO/requirements.txt and is only needed to drive the real robot cell.
+# Everything here -- all of architecture items 1-11 -- runs and is tested with
+# just the packages below.
+
+# LLM access, including strict JSON-schema structured output
+openai>=1.30
+
+# Verification Agent: colour classification, frame-differencing, volume delta
+opencv-python>=4.8
+numpy>=1.24
+pillow>=10.0
+
+# Testing
+pytest>=7.4
+
+# --- Real hardware only ------------------------------------------------------
+# NOT installable on a laptop; install these on the robot control PC. The
+# pipeline imports them lazily, so their absence is not an error in mock mode.
+#   frankapy        Franka Emika Panda control
+#   pyrealsense2    RealSense cameras
+#   robomail        PLATO's camera helpers

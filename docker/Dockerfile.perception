@@ -1,0 +1,117 @@
+# =============================================================================
+# chemist-perception -- PLATO's vision stack (GroundingDINO, SAM, grasping).
+#
+# This is the image that exists because the dependency stack is hostile, not
+# because containers are fashionable. It is large (several GB) and slow to
+# build, and it is needed only when running real scene grounding or grasp
+# prediction. Day-to-day work uses Dockerfile.agents instead.
+#
+# NOT IN THIS IMAGE: frankapy. Franka control needs a PREEMPT_RT kernel and
+# low-latency scheduling; it runs natively on the robot control PC and talks to
+# these containers over the network. Containerising it would add latency risk
+# for no benefit.
+#
+# Build:  docker compose --profile perception build perception
+# Run:    docker compose --profile perception run --rm perception bash
+#
+# ---------------------------------------------------------------------------
+# STATUS: unverified build. Written against PLATO's pinned versions but never
+# built -- there is no GPU or Docker daemon on the machine this was authored on.
+# Expect to iterate on the three sections marked RESOLVE below, on a GPU host.
+# ---------------------------------------------------------------------------
+# =============================================================================
+
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Ubuntu 22.04 ships Python 3.10, which is deliberate here.
+#
+# RESOLVE (1) -- Python version:
+#   PLATO pins numpy==1.23.0, which predates cp311 wheels. On Python 3.11 pip
+#   will try to build numpy from source and usually fails. Two ways out:
+#     (a) stay on 3.10, as this image does -- zero changes to PLATO's pins; or
+#     (b) bump to numpy>=1.23.2 in the PLATO fork and move to 3.11, matching
+#         Dockerfile.agents exactly.
+#   (b) is tidier long term. (a) is chosen here so the first build tests
+#   PLATO's own pins rather than our changes to them.
+RUN apt-get update \
+ && apt-get install --no-install-recommends -y \
+      python3.10 python3.10-dev python3-pip \
+      build-essential cmake git wget \
+      libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
+      libusb-1.0-0 \
+ && rm -rf /var/lib/apt/lists/* \
+ && ln -sf /usr/bin/python3.10 /usr/local/bin/python \
+ && ln -sf /usr/bin/python3.10 /usr/local/bin/python3
+
+WORKDIR /app
+
+# --- torch first, from the CUDA 11.8 index ---------------------------------
+# Installed ahead of PLATO's requirements so pip resolves the CUDA build rather
+# than the default CPU wheel that PyPI would serve for torch==2.0.1.
+RUN pip install --no-cache-dir \
+      torch==2.0.1 torchvision==0.15.2 \
+      --index-url https://download.pytorch.org/whl/cu118
+
+# --- PLATO's own requirements ----------------------------------------------
+# The submodule is populated on the host (git submodule update --init
+# --recursive) and bind-mounted or copied in.
+COPY PLATO/PLATO/requirements.txt /tmp/plato-requirements.txt
+
+# RESOLVE (2) -- faiss and pydensecrf:
+#   PLATO's requirements name `faiss==1.5` and `pydensecrf==1.0`. Neither is
+#   installable under those names: faiss ships as faiss-cpu / faiss-gpu, and
+#   pydensecrf needs a source build against a modern Cython. Our fork's
+#   requirements.txt fixes the *syntax* so pip can parse the file; resolving
+#   them to installable distributions is this image's job.
+#
+#   They are stripped from PLATO's list and installed explicitly below, so a
+#   failure here is legible instead of being buried in a 40-package resolve.
+RUN grep -vE '^(faiss|pydensecrf|torch|torchvision)' /tmp/plato-requirements.txt \
+      > /tmp/plato-filtered.txt \
+ && pip install --no-cache-dir -r /tmp/plato-filtered.txt
+
+RUN pip install --no-cache-dir faiss-gpu \
+ || pip install --no-cache-dir faiss-cpu
+
+# pydensecrf from source; the PyPI sdist does not build against modern Cython,
+# the git head does.
+RUN pip install --no-cache-dir cython \
+ && pip install --no-cache-dir git+https://github.com/lucasb-eyer/pydensecrf.git \
+ || echo "WARNING: pydensecrf did not build. It is not imported by the chemist pipeline; \
+resolve only if PLATO's original CRF refinement path is needed."
+
+# --- robomail ---------------------------------------------------------------
+# PLATO imports `robomail.vision` in nine places (cameras, calibration,
+# segmentation). This is the MAIL lab's own package, and the lab's fork is the
+# source of truth rather than upstream.
+#
+# RESOLVE (3) -- robomail's own dependency:
+#   Its README requires https://github.com/iamlab-cmu/perception, which pulls
+#   in the Berkeley AUTOLab stack. Verify that resolves on a GPU host; it may
+#   need pinning.
+ARG ROBOMAIL_REPO=https://github.com/rumilog/robomail.git
+ARG ROBOMAIL_REF=main
+RUN pip install --no-cache-dir "git+${ROBOMAIL_REPO}@${ROBOMAIL_REF}" \
+ || echo "WARNING: robomail did not install. Needed only for the real camera path."
+
+# --- the chemist pipeline on top -------------------------------------------
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+ENV PYTHONPATH=/app:/app/PLATO:/app/PLATO/SAM:/app/PLATO/grasping/grasping/os_tog/notebooks \
+    PLATO_HARDWARE=mock
+
+# Model weights (SAM checkpoint, GroundingDINO weights) are NOT baked in: they
+# are large, separately licensed, and change independently of this image.
+# Mount them at /weights -- see docker-compose.yml.
+ENV SAM_CHECKPOINT=/weights/sam_vit_b_01ec64.pth \
+    GROUNDING_DINO_WEIGHTS=/weights/groundingdino_swint_ogc.pth
+
+CMD ["bash"]

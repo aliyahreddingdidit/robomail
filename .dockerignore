@@ -1,0 +1,41 @@
+# Secrets never enter an image layer. The key arrives at RUN time via
+# compose's `env_file:`, so it lives in the container's environment and not
+# in a layer that could be pushed to a registry.
+.env
+.env.*
+*.pem
+*.key
+
+# Version control
+.git
+.gitignore
+**/.git
+
+# Python build artefacts
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments (host-specific, would shadow the image's own)
+venv/
+.venv/
+env/
+
+# Run artefacts -- these are bind-mounted at runtime, not baked in
+data/logs/
+data/frames/
+data/grasps/
+Save_dir/
+
+# Patch backups
+*.orig
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

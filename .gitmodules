@@ -1,0 +1,3 @@
+[submodule "third_party/robomail"]
+	path = third_party/robomail
+	url = https://github.com/rumilog/robomail.git

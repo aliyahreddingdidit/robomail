@@ -1,0 +1,70 @@
+# =============================================================================
+# chemist-agents -- the agent pipeline (architecture items 1-11).
+#
+# Small and fast on purpose. This image is what teammates pull, what CI runs,
+# and what mock experiments run in. It needs NO GPU, NO robot, and nothing from
+# PLATO -- the pipeline's only coupling to PLATO is a deferred import inside
+# PlatoGraspProvider, which is never reached in mock mode.
+#
+# Build:  docker compose build agents
+# Test:   docker compose run --rm tests
+# Run:    docker compose run --rm agents python run_experiment.py --experiment A
+# =============================================================================
+
+FROM python:3.11-slim AS base
+
+# Python 3.11 rather than 3.13: it is the newest version the perception image
+# can also use (PLATO pins numpy==1.23.0, which predates 3.11 wheels -- see
+# Dockerfile.perception), so the two images stay within one minor version of
+# each other and dependency surprises stay comparable.
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# opencv-python (as pinned in requirements.txt) dynamically links libGL and
+# glib even when it never opens a window. Installing the two runtime libs keeps
+# requirements.txt authoritative for both host and container -- the alternative,
+# swapping to opencv-python-headless here, would mean the container tests a
+# different package than the host does.
+RUN apt-get update \
+ && apt-get install --no-install-recommends -y \
+      libgl1 \
+      libglib2.0-0 \
+ && rm -rf /var/lib/apt/lists/*
+
+# --- dependency layer -------------------------------------------------------
+# Copied alone and installed first so that editing source does not invalidate
+# the pip layer. Rebuilds after a code change take seconds.
+WORKDIR /app
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# --- non-root user ----------------------------------------------------------
+# Trial logs are bind-mounted to the host. Running as root would write them as
+# root-owned files on a Linux host, which is a nuisance to clean up. UID is
+# overridable so it can be matched to the lab machine's user.
+ARG UID=1000
+ARG GID=1000
+RUN groupadd --gid ${GID} chemist 2>/dev/null || true \
+ && useradd --uid ${UID} --gid ${GID} --create-home --shell /bin/bash chemist 2>/dev/null || true \
+ && mkdir -p /app/data/logs \
+ && chown -R ${UID}:${GID} /app
+
+# --- source -----------------------------------------------------------------
+COPY --chown=${UID}:${GID} . .
+
+USER chemist
+
+# Mock hardware is the default here as it is everywhere else: reaching for the
+# real cell should be an explicit act. The real cell is not containerised at
+# all -- frankapy needs a real-time kernel and runs natively on the control PC.
+ENV PLATO_HARDWARE=mock \
+    PYTHONPATH=/app
+
+# Fails the build if the pipeline cannot even import, which catches a broken
+# dependency pin here rather than in someone's first run.
+RUN python -c "import orchestrator, agents.verification, run_experiment; print('import check OK')"
+
+CMD ["python", "-m", "pytest", "tests/", "-q"]
