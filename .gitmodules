@@ -1,3 +1,6 @@
 [submodule "third_party/robomail"]
 	path = third_party/robomail
 	url = https://github.com/rumilog/robomail.git
+[submodule "PLATO"]
+	path = PLATO
+	url = https://github.com/aliyahreddingdidit/PLATO.git

@@ -147,25 +147,17 @@ def check_secret_hygiene(report: Report) -> None:
 
 
 def check_plato_submodule(report: Report) -> None:
+    """PLATO is a real submodule of aliyahreddingdidit/PLATO, a fork carrying
+    the two portability fixes on top of ArvindCar/PLATO upstream. See
+    docs/plato_portability_fixes.patch for the same diff as a plain file."""
     plato = ROOT / "PLATO"
     if not plato.is_dir() or not any(plato.iterdir()):
         report.add(
             WARN,
-            "PLATO checkout",
-            "missing -- clone https://github.com/ArvindCar/PLATO.git to PLATO/, then apply "
-            "docs/plato_portability_fixes.patch (see README). Not yet a real submodule; no "
-            "fork exists to register one against.",
+            "PLATO submodule",
+            "empty -- run: git submodule update --init --recursive (only needed for the real cell)",
         )
         return
-
-    git_dir = plato / ".git"
-    if git_dir.exists():
-        report.add(
-            OK if (ROOT / "docs" / "plato_portability_fixes.patch").is_file() else WARN,
-            "PLATO status",
-            "present as a local checkout (deliberately NOT a submodule yet -- no fork exists "
-            "to register one against; it is root-.gitignore'd). See docs/progress.md.",
-        )
 
     requirements = plato / "PLATO" / "requirements.txt"
     if not requirements.is_file():

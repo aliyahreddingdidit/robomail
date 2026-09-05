@@ -35,13 +35,3 @@ Save_dir/
 *.swp
 .DS_Store
 Thumbs.db
-
-# --- PLATO: temporarily excluded, not yet a real submodule -----------------
-# It has no fork we control yet, so it cannot be registered as a submodule --
-# a submodule commit must be fetchable from ITS OWN remote, and the fixes in
-# docs/plato_portability_fixes.patch only exist locally (see PLATO/, branch
-# chemist-patches). Once a fork exists:
-#   1. remove this ignore rule
-#   2. inside PLATO/: git remote set-url origin <fork-url> && git push origin chemist-patches:main
-#   3. from the root: git submodule add <fork-url> PLATO
-/PLATO/

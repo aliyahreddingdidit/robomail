@@ -19,45 +19,34 @@ status, blockers and what is *not* yet verified are in
 git clone --recurse-submodules <this repo's URL>
 ```
 
-That pulls in `third_party/robomail` (the MAIL lab's Franka utilities,
-[rumilog/robomail](https://github.com/rumilog/robomail) — PLATO's
-`import robomail.vision` depends on it) as a real submodule. If you cloned
-without `--recurse-submodules`, catch up with:
+That pulls in both submodules:
+
+- `PLATO` — [aliyahreddingdidit/PLATO](https://github.com/aliyahreddingdidit/PLATO),
+  a fork of [ArvindCar/PLATO](https://github.com/ArvindCar/PLATO) carrying two
+  portability fixes on top of upstream: `requirements.txt` had invalid pip
+  syntax (single `=` instead of `==` on three pins, plus a duplicate
+  conflicting `Pillow` pin) and `exec_script.py` had absolute paths hardcoded
+  to the original author's machine. The same diff also lives as a plain file
+  at `docs/plato_portability_fixes.patch`, independent of any branch, for
+  reference.
+- `third_party/robomail` — [rumilog/robomail](https://github.com/rumilog/robomail),
+  the MAIL lab's Franka utilities. PLATO's `import robomail.vision` depends
+  on it.
+
+If you cloned without `--recurse-submodules`, catch up with:
 
 ```bash
 git submodule update --init --recursive
 ```
 
-**PLATO itself is not yet a submodule** — see the box below.
+`python scripts/check_setup.py` verifies both landed correctly.
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### PLATO: a real checkout, not (yet) a real submodule
-
-```bash
-git clone https://github.com/ArvindCar/PLATO.git
-cd PLATO && git apply ../docs/plato_portability_fixes.patch && cd ..
-```
-
-A git submodule is a pointer to a commit on *someone else's* remote. Our two
-portability fixes (`requirements.txt` syntax, `exec_script.py`'s hardcoded
-paths) only exist as a local, unpushed branch (`chemist-patches`) inside a
-plain PLATO checkout — there is no fork yet to point a submodule at. Wiring
-one anyway, pointing at unpatched upstream, would silently hand every future
-clone the broken files back. So for now: clone PLATO plainly and apply
-`docs/plato_portability_fixes.patch` (a plain diff, independent of any branch)
-by hand. `python scripts/check_setup.py` verifies this landed correctly.
-
-Once a fork exists (`ArvindCar/PLATO` → Fork, or the lab's own fork):
-
-```bash
-git submodule add <fork-url> PLATO   # from the repo root
-# then, inside PLATO/: point origin at the fork and push chemist-patches
-```
-
-and remove the `/PLATO/` line from `.gitignore`.
+PLATO's own dependency stack (`PLATO/PLATO/requirements.txt`) is separate and
+only needed to drive the real robot cell — see [`docker/Dockerfile.perception`](docker/Dockerfile.perception).
 
 Then create your `.env` **in a text editor** (never type a key into a terminal —
 shell history keeps it in plaintext):

@@ -173,16 +173,18 @@ to switch.
 
 ## Blockers and open questions
 
-1. **No PLATO fork exists yet.** `docs/plato_portability_fixes.patch` and the
-   local `chemist-patches` branch inside `PLATO/` hold our two portability
-   fixes, but neither can be pushed anywhere or registered as a submodule
-   until a fork exists — a submodule can only point at a commit its own
-   remote can serve. `robomail` has a working fork
-   ([rumilog/robomail](https://github.com/rumilog/robomail)) and is wired as
-   a real submodule at `third_party/robomail`; PLATO is not, and `/PLATO/` is
-   explicitly gitignored at the root until it is. See the README's "PLATO: a
-   real checkout, not (yet) a real submodule" section for the exact unblock
-   steps.
+1. ~~No PLATO fork exists yet.~~ **RESOLVED.** `aliyahreddingdidit/PLATO` is a
+   fork of `ArvindCar/PLATO`; the portability-fix commit was pushed to its
+   `main` as a clean fast-forward, and `PLATO` is now a real submodule of this
+   repo, verified by cloning fresh with `--recurse-submodules` and confirming
+   `PLATO/PLATO/requirements.txt` parses. `third_party/robomail` (real
+   submodule of [rumilog/robomail](https://github.com/rumilog/robomail)) was
+   already working. Both submodules are now genuine — see README setup.
+   One naming trap worth recording: an earlier fork attempt landed at
+   `aliyahreddingdidit/robomail-fork`, which turned out to be a fork of
+   *robomail*, not PLATO (same commit hash as `rumilog/robomail`'s `main` —
+   caught by comparing SHAs before wiring anything in). Worth double-checking
+   fork URLs against the source repo's actual commit hash before trusting them.
 2. **No booklet photos for Experiments C and D.** The Goal Extraction Agent
    reads the goal from an image by design, so instant snow (C) and hydrophobic
    sand (D) cannot run until someone photographs those booklet pages.
