@@ -155,7 +155,9 @@ def check_plato_submodule(report: Report) -> None:
         report.add(
             WARN,
             "PLATO submodule",
-            "empty -- run: git submodule update --init --recursive (only needed for the real cell)",
+            "empty -- run: git submodule update --init PLATO (only needed for the real cell; "
+            "do NOT use --recursive here -- PLATO's own nested submodules pin a GroundingDINO "
+            "commit that no longer resolves and will hard-abort the whole init)",
         )
         return
 
@@ -203,7 +205,12 @@ def check_robomail_submodule(report: Report) -> None:
             "registered but empty -- run: git submodule update --init third_party/robomail",
         )
     else:
-        report.add(WARN, "robomail submodule", "not present -- run: git submodule update --init --recursive")
+        report.add(
+            WARN,
+            "robomail submodule",
+            "not present -- run: git submodule update --init PLATO third_party/robomail "
+            "(NOT --recursive -- see the PLATO submodule warning above)",
+        )
 
 
 def check_fixtures(report: Report) -> None:

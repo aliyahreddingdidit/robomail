@@ -185,6 +185,26 @@ to switch.
    *robomail*, not PLATO (same commit hash as `rumilog/robomail`'s `main` —
    caught by comparing SHAs before wiring anything in). Worth double-checking
    fork URLs against the source repo's actual commit hash before trusting them.
+
+   **A second, separate finding from the same wiring work: `git clone
+   --recurse-submodules` on this repo hard-aborts.** PLATO's own upstream
+   `.gitmodules` (inherited as-is, from `ArvindCar/PLATO`, not something
+   either fork changed) pins `SAM/GroundingDINO` at a commit
+   (`eddb8ab7bfe20e956dfdf88065d0583923358c0d`) that no longer resolves from
+   that repo's current refs. `--recurse-submodules` tries to fetch it while
+   recursing PLATO's own nested submodules and fails hard, aborting the
+   *entire* clone before even reaching `third_party/robomail` -- worse than
+   the situation before PLATO was wired in, when recursion worked cleanly.
+   Fixed by dropping `--recurse-submodules` from the documented setup
+   entirely, in favour of a scoped `git submodule update --init PLATO
+   third_party/robomail`, which stops at our two direct submodules and never
+   touches PLATO's broken grandchildren. Verified end to end: fresh clone,
+   scoped init, `pip install`, full suite -- 118 passed, 2 skipped (the 2
+   being the live-model checks, expected with no `.env` in a fresh clone).
+   `SAM/GroundingDINO` and `grasping/os_tog` remain genuinely unpopulated and
+   only matter for the real perception stack; re-pinning GroundingDINO to a
+   commit that still resolves is un-investigated and would be needed before
+   anyone relies on them.
 2. **No booklet photos for Experiments C and D.** The Goal Extraction Agent
    reads the goal from an image by design, so instant snow (C) and hydrophobic
    sand (D) cannot run until someone photographs those booklet pages.

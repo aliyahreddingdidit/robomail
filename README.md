@@ -16,8 +16,22 @@ status, blockers and what is *not* yet verified are in
 ## Setup
 
 ```bash
-git clone --recurse-submodules <this repo's URL>
+git clone <this repo's URL>
+cd robomail
+git submodule update --init PLATO third_party/robomail
 ```
+
+**Do not use plain `--recurse-submodules`** — it recurses all the way down
+into PLATO's own nested submodules (`SAM/GroundingDINO`,
+`grasping/grasping/os_tog`), and PLATO's upstream `.gitmodules` pins a
+GroundingDINO commit that no longer resolves from that repo's current refs
+(`eddb8ab7...` — an upstream problem, not something either fork introduced).
+`git clone --recurse-submodules` **hard-aborts the entire clone** on that
+error before even reaching `third_party/robomail`. The scoped command above
+initialises exactly the two submodules this project needs and stops there;
+neither `SAM/GroundingDINO` nor `grasping/os_tog` is required unless you are
+driving the real perception stack (`docker/Dockerfile.perception`), and if
+you do need them, expect to re-pin GroundingDINO yourself first.
 
 That pulls in both submodules:
 
@@ -33,10 +47,11 @@ That pulls in both submodules:
   the MAIL lab's Franka utilities. PLATO's `import robomail.vision` depends
   on it.
 
-If you cloned without `--recurse-submodules`, catch up with:
+If you already have a clone without the submodules populated, catch up with
+the same scoped command:
 
 ```bash
-git submodule update --init --recursive
+git submodule update --init PLATO third_party/robomail
 ```
 
 `python scripts/check_setup.py` verifies both landed correctly.
